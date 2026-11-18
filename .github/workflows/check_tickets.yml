@@ -5,6 +5,16 @@ on:
   # schedule disabled - cron-job.org triggers this via workflow_dispatch every 5 minutes
   # - cron: "*/5 * * * *"
   workflow_dispatch:          # triggered by cron-job.org + allows manual runs from Actions tab
+    inputs:
+      event_id:
+        description: "Event ID to check (empty = Olympiacos - Milan)"
+        required: false
+        default: ""
+      dry_run:
+        description: "Dry run: select seats but do NOT add them to the cart"
+        type: boolean
+        required: false
+        default: false
 
 # One check at a time; never cancel a run that may be adding seats to the cart
 concurrency:
@@ -27,6 +37,8 @@ jobs:
       EMAIL_RECIPIENTS:   ${{ secrets.EMAIL_RECIPIENTS }}
       MAX_PRICE:          ${{ vars.MAX_PRICE }}
       TICKETS:            ${{ vars.TICKETS }}
+      EVENT_ID:           ${{ inputs.event_id }}
+      DRY_RUN:            ${{ inputs.dry_run && '1' || '0' }}
 
     steps:
       # ── 1. Checkout ─────────────────────────────────────────────────────────
