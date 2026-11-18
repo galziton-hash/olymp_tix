@@ -394,12 +394,12 @@ async def run_browser(event_name: str, gates: list[dict]) -> None:
                 f"{' (side by side)' if picked['adjacent'] else ' (not side by side)'}\n"
                 f"Total: {picked['total']}\n"
                 f"Found at: {now()}\n\n"
-                f"Log in to complete payment quickly - the cart reservation expires:\n"
+                f"The reservation expires after ~10 minutes. Log in and complete it:\n"
                 f"{cart_url}\n"
                 f"Account: {EMAIL}"
             )
             print(f"\n{'='*60}\n{title}\n{body}\n{'='*60}")
-            await send_ntfy(title, body, priority="max", click=TARGET_URL)
+            await send_ntfy(title, body, priority="max", click=cart_url)
             send_email(title, body)
 
         except SystemExit:
