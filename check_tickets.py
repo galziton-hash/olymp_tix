@@ -56,6 +56,7 @@ import smtplib
 import ssl
 import sys
 import traceback
+import unicodedata
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
@@ -100,6 +101,23 @@ os.makedirs(SS, exist_ok=True)
 # ── Helpers ────────────────────────────────────────────────────────────────────
 def now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+
+
+_GREEK_DIGRAPHS = [("ΟΥ", "OU"), ("ΑΥ", "AV"), ("ΕΥ", "EV"), ("ΓΓ", "NG"),
+                   ("ΓΚ", "GK"), ("ΜΠ", "B"), ("ΝΤ", "NT"), ("ΤΣ", "TS"), ("ΤΖ", "TZ")]
+_GREEK_LETTERS = dict(zip("ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ",
+                          ["A", "V", "G", "D", "E", "Z", "I", "TH", "I", "K", "L", "M",
+                           "N", "X", "O", "P", "R", "S", "T", "Y", "F", "CH", "PS", "O"]))
+
+
+def to_english(text: str) -> str:
+    """Transliterates Greek names (the site has no English version for some events)."""
+    text = unicodedata.normalize("NFD", text.upper())
+    text = "".join(c for c in text if unicodedata.category(c) != "Mn").replace("ς", "Σ")
+    text = text.replace("ΘΥΡΑ", "GATE").replace("ΟΛΥΜΠΙΑΚΟΣ", "OLYMPIACOS")
+    for gr, en in _GREEK_DIGRAPHS:
+        text = text.replace(gr, en)
+    return "".join(_GREEK_LETTERS.get(c, c) for c in text)
 
 
 async def send_ntfy(title: str, body: str, priority: str = "urgent",
@@ -177,12 +195,12 @@ def find_candidate_gates() -> tuple[str, list[dict]]:
                 continue
             price = float(discounts[0]["price"])
             if price < MAX_PRICE:
-                zone_name = (zone.get("name") or "").replace("ΘΥΡΑ", "GATE")
-                label = zone_name if len(sections) == 1 else sec.get("name")
+                zone_name = to_english(zone.get("name") or "")
+                label = zone_name if len(sections) == 1 else to_english(sec.get("name") or "")
                 gates.append({"zone": zone_name, "section": sec.get("name"),
                               "label": label, "price": price})
     gates.sort(key=lambda g: g["price"])
-    return data.get("name", "event"), gates
+    return to_english(data.get("name") or "event"), gates
 
 
 # ── 2. Login ───────────────────────────────────────────────────────────────────
