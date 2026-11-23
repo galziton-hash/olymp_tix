@@ -79,6 +79,7 @@ EVENT_ID  = os.environ.get("EVENT_ID") or "8e6e47a4-24bf-4e19-a2d5-f329b34a568f"
 MAX_PRICE = float(os.environ.get("MAX_PRICE") or 300)
 TICKETS   = int(os.environ.get("TICKETS") or 2)
 DRY_RUN   = (os.environ.get("DRY_RUN") or "0") == "1"
+SALE_WAIT_SECONDS = int(os.environ.get("SALE_WAIT_SECONDS") or 420)
 
 EMAIL    = os.environ.get("LOGIN_EMAIL",    "")
 PASSWORD = os.environ.get("LOGIN_PASSWORD", "")
@@ -372,10 +373,27 @@ async def run_browser(event_name: str, gates: list[dict]) -> None:
                 sys.exit(1)
 
             print(f"\n[{now()}] Opening match seat map...")
-            await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60_000)
-            await accept_cookies(page)
             btn = page.locator(f"a[eventityid='{EVENT_ID}']").first
-            await btn.wait_for(state="attached", timeout=30_000)
+            deadline = asyncio.get_running_loop().time() + SALE_WAIT_SECONDS
+            while True:
+                await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60_000)
+                await accept_cookies(page)
+                try:
+                    await btn.wait_for(state="attached", timeout=10_000)
+                    break
+                except Exception:
+                    pass
+                # Before the sale opens the button is disabled with a popover
+                # like "Η προπώληση θα ξεκινήσει στις 12:00" and has no eventityid.
+                note = await page.evaluate("""() => {
+                    const b = document.querySelector('a.eb-button--disabled[data-content]');
+                    return b ? b.getAttribute('data-content') : null;
+                }""")
+                if asyncio.get_running_loop().time() > deadline:
+                    print(f"[main] Tickets button still closed ({note}) - giving up this run.")
+                    return
+                print(f"[main] Tickets button not open yet ({note}) - reloading...")
+                await asyncio.sleep(5)
             await btn.evaluate("b => { b.scrollIntoView({block: 'center'}); b.click(); }")
             await page.wait_for_selector("area[data-section-name]", state="attached",
                                          timeout=45_000)
