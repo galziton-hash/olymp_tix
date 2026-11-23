@@ -80,6 +80,7 @@ MAX_PRICE = float(os.environ.get("MAX_PRICE") or 300)
 TICKETS   = int(os.environ.get("TICKETS") or 2)
 DRY_RUN   = (os.environ.get("DRY_RUN") or "0") == "1"
 SALE_WAIT_SECONDS = int(os.environ.get("SALE_WAIT_SECONDS") or 420)
+QUEUE_WAIT_SECONDS = int(os.environ.get("QUEUE_WAIT_SECONDS") or 1500)
 
 EMAIL    = os.environ.get("LOGIN_EMAIL",    "")
 PASSWORD = os.environ.get("LOGIN_PASSWORD", "")
@@ -204,6 +205,24 @@ def find_candidate_gates() -> tuple[str, list[dict]]:
     return to_english(data.get("name") or "event"), gates
 
 
+async def goto_through_queue(page, url: str) -> None:
+    """
+    During busy sales the site sends visitors through a Queue-it waiting room
+    (*.queue-it.net) that redirects back when it is our turn.
+    """
+    try:
+        await page.goto(url, wait_until="domcontentloaded", timeout=QUEUE_WAIT_SECONDS * 1000)
+    except Exception:
+        if "queue-it" not in page.url:
+            raise
+    if "queue-it" in page.url:
+        print(f"[queue] In the waiting room: {page.url[:80]}")
+        await page.wait_for_url(lambda u: "queue-it" not in u,
+                                timeout=QUEUE_WAIT_SECONDS * 1000)
+        await page.wait_for_load_state("domcontentloaded")
+        print(f"[queue] Through the waiting room -> {page.url[:80]}")
+
+
 # ── 2. Login ───────────────────────────────────────────────────────────────────
 async def accept_cookies(page) -> None:
     try:
@@ -217,7 +236,7 @@ async def accept_cookies(page) -> None:
 
 async def do_login(page) -> bool:
     print(f"[{now()}] Opening login page...")
-    await page.goto(LOGIN_URL, wait_until="domcontentloaded", timeout=60_000)
+    await goto_through_queue(page, LOGIN_URL)
     await accept_cookies(page)
 
     try:
@@ -376,7 +395,7 @@ async def run_browser(event_name: str, gates: list[dict]) -> None:
             btn = page.locator(f"a[eventityid='{EVENT_ID}']").first
             deadline = asyncio.get_running_loop().time() + SALE_WAIT_SECONDS
             while True:
-                await page.goto(TARGET_URL, wait_until="domcontentloaded", timeout=60_000)
+                await goto_through_queue(page, TARGET_URL)
                 await accept_cookies(page)
                 try:
                     await btn.wait_for(state="attached", timeout=10_000)

@@ -25,7 +25,7 @@ jobs:
   check-seats:
     name: Check gates under 300€ (Olympiacos - Milan)
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 30       # room for the Queue-it waiting room during busy sales
 
     env:
       LOGIN_EMAIL:        ${{ secrets.LOGIN_EMAIL }}
@@ -120,13 +120,3 @@ jobs:
                   headers={'Content-Type': 'application/json'}))
               print(f"ALERT sent! Topic: {topic}")
           EOF
-
-      # ── 6. Screenshots (seat selection / cart / errors) ──────────────────────
-      - name: Upload screenshots
-        if: always() && steps.precheck.outputs.found == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshots-${{ github.run_number }}
-          path: screenshots/
-          retention-days: 3
-          if-no-files-found: ignore
